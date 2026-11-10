@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PassShield</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Plan: instrumento de auditoría. Encabezado con pestañas; cada vista abre con el resumen (nivel + entropía)
+   y debajo el paso a paso matemático. Tinta azul petróleo, acento latón, semáforo de 5 niveles aparte. */
+:root{
+  --bg:#f3f5f6; --panel:#ffffff; --ink:#132630; --muted:#5b6b73; --line:#d9e0e3;
+  --accent:#0f5e73; --accent-soft:#e3f0f3; --brass:#a8741a;
+  --l1:#c0392b; --l2:#d9731c; --l3:#c9a227; --l4:#3c9a5f; --l5:#1f7f9e;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"JetBrains Mono", Consolas, "Courier New", monospace;
+  --r:14px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d171c; --panel:#14222a; --ink:#e6eef1; --muted:#93a6ae; --line:#24363f;
+    --accent:#4fb3cc; --accent-soft:#16323b; --brass:#d9a54a;
+    --l1:#e8604f; --l2:#f0954a; --l3:#e3c24f; --l4:#5cc184; --l5:#4fb3cc; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d171c; --panel:#14222a; --ink:#e6eef1; --muted:#93a6ae; --line:#24363f;
+  --accent:#4fb3cc; --accent-soft:#16323b; --brass:#d9a54a;
+  --l1:#e8604f; --l2:#f0954a; --l3:#e3c24f; --l4:#5cc184; --l5:#4fb3cc; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.55 var(--body)}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+.mono,code{font-family:var(--mono)}
+.num{font-variant-numeric:tabular-nums}
+sup{font-size:.62em}
+
+/* encabezado */
+header{background:var(--panel);border-bottom:1px solid var(--line)}
+.top{display:flex;align-items:center;gap:14px;padding:18px 0 10px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:12px}
+.logo svg{width:40px;height:44px;flex:none}
+.logo h1{font-size:28px;font-weight:800}
+.logo p{margin:0;color:var(--muted);font-size:14px}
+.badge{margin-left:auto;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.badge .dot{width:8px;height:8px;border-radius:50%;background:var(--l4)}
+nav{display:flex;gap:4px;overflow-x:auto}
+nav a{padding:10px 14px;color:var(--muted);text-decoration:none;font-weight:600;font-size:15px;border-bottom:3px solid transparent;white-space:nowrap}
+nav a:hover{color:var(--ink)}
+nav a[aria-current="page"]{color:var(--accent);border-color:var(--accent)}
+nav a:focus-visible,button:focus-visible,input:focus-visible,label:focus-within{outline:2px solid var(--brass);outline-offset:2px}
+
+main.wrap{padding:28px 20px 40px}
+.view{display:none}
+.view.on{display:block}
+.intro{max-width:68ch;color:var(--muted);margin:0 0 20px}
+.grid{display:grid;gap:18px}
+.g2{grid-template-columns:1.05fr .95fr}
+.g3{grid-template-columns:repeat(3,1fr)}
+@media (max-width:860px){.g2,.g3{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.card h2{font-size:19px;margin-bottom:12px}
+.card h3{font-size:15px;color:var(--muted);font-family:var(--body);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.eq-tag{font-family:var(--mono);color:var(--brass);font-size:13px;margin-left:6px}
+
+/* entrada */
+.field{display:flex;gap:8px;align-items:stretch}
+.field input{flex:1;min-width:0;font:600 22px var(--mono);padding:14px 16px;border:2px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink)}
+.field input:focus{border-color:var(--accent);outline:none}
+.btn{font:600 14px var(--body);padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.examples{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center;font-size:14px;color:var(--muted)}
+.chip{font:500 13px var(--mono);padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+.chip:hover{border-color:var(--accent)}
+.note{font-size:13px;color:var(--muted);margin-top:10px}
+
+/* resumen */
+.summary{display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:center}
+@media (max-width:520px){.summary{grid-template-columns:1fr}}
+.gauge{width:150px;height:150px;position:relative}
+.gauge svg{width:100%;height:100%;transform:rotate(-90deg)}
+.gauge .center{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.gauge .bits{font:800 38px/1 var(--display)}
+.gauge .unit{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.level{display:inline-flex;align-items:center;gap:8px;font:800 22px var(--display);padding:6px 14px;border-radius:10px;color:#fff}
+.meter{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin:14px 0 8px}
+.meter span{height:8px;border-radius:4px;background:var(--line)}
+.meter-l{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;font-size:11px;color:var(--muted)}
+.verdict{margin-top:10px;color:var(--muted);font-size:15px}
+
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}
+.tile{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--bg)}
+.tile .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.tile .v{font:700 26px var(--display);margin-top:2px}
+.tile .s{font-size:12px;color:var(--muted)}
+
+/* paso a paso */
+.sets{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+@media (max-width:520px){.sets{grid-template-columns:repeat(2,1fr)}}
+.set{border:1.5px dashed var(--line);border-radius:10px;padding:8px 10px;color:var(--muted);transition:.2s}
+.set b{display:block;font:700 20px var(--display)}
+.set small{font-size:12px}
+.set.on{border-style:solid;border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}
+.step{display:grid;grid-template-columns:28px 1fr;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.step:first-of-type{border-top:0}
+.step .n{width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--panel);display:grid;place-items:center;font:700 13px var(--mono)}
+.step .rule{font-size:13px;color:var(--muted)}
+.step .math{font:500 16px var(--mono);margin-top:2px;overflow-wrap:anywhere}
+.big{font:400 13px/1.6 var(--mono);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;max-height:120px;overflow:auto;overflow-wrap:anywhere}
+
+/* ataques */
+.attack{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 0;border-top:1px solid var(--line)}
+.attack:first-of-type{border-top:0}
+.attack .name{font-weight:600}
+.attack .rate{font:12px var(--mono);color:var(--muted)}
+.attack .t{font:700 18px var(--display);text-align:right}
+.attack .tp{font-size:12px;color:var(--muted);text-align:right}
+.bar{grid-column:1/-1;height:8px;background:var(--line);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:4px;transition:width .35s}
+.scale{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:8px}
+
+.list{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+.list li{padding:10px 12px;border-radius:10px;font-size:14.5px;border-left:4px solid}
+.warn li{background:color-mix(in srgb,var(--l2) 12%,transparent);border-color:var(--l2)}
+.tips li{background:var(--accent-soft);border-color:var(--accent)}
+.empty{color:var(--muted);font-size:14px}
+
+/* política */
+.opts{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.opt{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;background:var(--bg)}
+.opt input{width:18px;height:18px;accent-color:var(--accent)}
+.opt .c{margin-left:auto;font:600 13px var(--mono);color:var(--muted)}
+.range{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.range label{font-size:13px;color:var(--muted);display:block}
+.range input[type=range]{width:100%;accent-color:var(--accent)}
+.range output{font:700 22px var(--display);color:var(--ink)}
+.switch{display:flex;gap:10px;align-items:center;margin-top:14px;padding:12px;border-radius:10px;background:var(--accent-soft);cursor:pointer;font-weight:500}
+.switch input{width:18px;height:18px;accent-color:var(--accent)}
+.pct{height:22px;border-radius:6px;background:var(--line);overflow:hidden;position:relative;margin:10px 0 4px}
+.pct i{display:block;height:100%;background:var(--accent);transition:width .35s}
+.pct span{position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-end;padding-right:10px;font:700 12px var(--mono);color:var(--ink);mix-blend-mode:normal}
+
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:2px solid var(--line)}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+td.r,th.r{text-align:right}
+tr.total td{font-weight:700;border-bottom:0;border-top:2px solid var(--ink)}
+.sign{font:700 16px var(--mono);color:var(--brass);text-align:center}
+.tablebox{overflow-x:auto}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font:700 12px var(--body);color:#fff;white-space:nowrap}
+
+/* comparar */
+.chart{width:100%;height:auto;display:block}
+.chart text{fill:var(--muted);font:11px var(--body)}
+.chart .lbl{fill:var(--ink);font-weight:600}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.addrow{display:flex;gap:8px;margin-top:12px}
+.addrow input{flex:1;min-width:0;font:500 15px var(--mono);padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
+.x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:16px}
+
+/* matemática */
+.formula{font:500 20px var(--mono);text-align:center;padding:14px;background:var(--bg);border-radius:10px;margin:10px 0;overflow-x:auto}
+.math-card p{margin:0 0 8px;font-size:15px}
+.example td{font-family:var(--mono)}
+
+footer{border-top:1px solid var(--line);padding:22px 0 30px;color:var(--muted);font-size:13px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="top">
+      <div class="logo">
+        <svg viewBox="0 0 40 44" aria-hidden="true">
+          <path d="M20 2 L37 8 V21 C37 32 29.5 39 20 42 C10.5 39 3 32 3 21 V8 Z" fill="var(--accent)"/>
+          <path d="M20 7 L32 11.2 V21 C32 29 26.6 34.3 20 36.6 Z" fill="var(--brass)" opacity=".9"/>
+          <text x="11.5" y="27" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="#fff">N</text>
+          <text x="20.5" y="20" font-family="JetBrains Mono, monospace" font-size="8" font-weight="700" fill="#fff">L</text>
+        </svg>
+        <div>
+          <h1>PassShield</h1>
+          <p>¿Cuántas contraseñas existen y cuánto tardaría un atacante en probarlas todas?</p>
+        </div>
+      </div>
+      <div class="badge"><span class="dot"></span>Todo se calcula en tu navegador. Nada se envía.</div>
+    </div>
+    <nav aria-label="Secciones">
+      <a href="#contrasena" data-view="contrasena">Analizar contraseña</a>
+      <a href="#politica" data-view="politica">Analizar política</a>
+      <a href="#comparar" data-view="comparar">Comparar</a>
+      <a href="#matematica" data-view="matematica">La matemática</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ============ CONTRASEÑA ============ -->
+<section class="view" id="v-contrasena">
+  <div class="card">
+    <label for="pw" class="note" style="display:block;margin:0 0 8px">Escribe una contraseña de prueba (no uses una real)</label>
+    <div class="field">
+      <input id="pw" type="text" autocomplete="off" spellcheck="false" value="Andres2024*">
+      <button class="btn" id="toggle" type="button" aria-pressed="false">Ocultar</button>
+    </div>
+    <div class="examples">Probar:
+      <button class="chip" type="button">123456</button>
+      <button class="chip" type="button">andres</button>
+      <button class="chip" type="button">Andres</button>
+      <button class="chip" type="button">Andres2024</button>
+      <button class="chip" type="button">Andres2024*</button>
+      <button class="chip" type="button">t7#Kq!v2Lm9$zR</button>
+      <button class="chip" type="button">caballo correcto pila grapa</button>
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-top:18px">
+    <div class="card">
+      <h3>Diagnóstico</h3>
+      <div class="summary">
+        <div class="gauge">
+          <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="none" stroke="var(--line)" stroke-width="11"/>
+            <circle id="gArc" cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="11" stroke-linecap="round" stroke-dasharray="0 327"/></svg>
+          <div class="center"><div class="bits num" id="gBits">0</div><div class="unit">bits</div></div>
+        </div>
+        <div>
+          <span class="level" id="level">—</span>
+          <div class="meter" id="meter"><span></span><span></span><span></span><span></span><span></span></div>
+          <div class="meter-l"><span>Muy débil</span><span>Débil</span><span>Media</span><span>Fuerte</span><span>Muy fuerte</span></div>
+          <p class="verdict" id="verdict"></p>
+        </div>
+      </div>
+      <div class="tiles">
+        <div class="tile"><div class="k">Longitud</div><div class="v num" id="tL">0</div><div class="s">L caracteres</div></div>
+        <div class="tile"><div class="k">Alfabeto</div><div class="v num" id="tN">0</div><div class="s">N símbolos posibles</div></div>
+        <div class="tile"><div class="k">Combinaciones</div><div class="v num" id="tW">0</div><div class="s">W = N<sup>L</sup></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Paso a paso</h3>
+      <div class="sets" id="sets"></div>
+      <div class="step"><span class="n">1</span><div><div class="rule">Regla de la suma (subconjuntos disjuntos)</div><div class="math" id="s1"></div></div></div>
+      <div class="step"><span class="n">2</span><div><div class="rule">Principio multiplicativo: L casillas con N opciones cada una</div><div class="math" id="s2"></div><div class="big" id="s2big"></div></div></div>
+      <div class="step"><span class="n">3</span><div><div class="rule">Entropía en bits</div><div class="math" id="s3"></div></div></div>
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-top:18px">
+    <div class="card">
+      <h3>Tiempo para romperla por fuerza bruta</h3>
+      <div id="attacks"></div>
+      <div class="scale"><span>1 ms</span><span>1 hora</span><span>1 año</span><span>10<sup>6</sup> años</span><span>10<sup>12</sup> años</span></div>
+      <p class="note">Tiempo promedio = W ÷ (2R). En promedio el atacante acierta a mitad del recorrido; el peor caso es recorrerlo todo.</p>
+    </div>
+    <div class="grid" style="gap:18px">
+      <div class="card"><h3>Advertencias</h3><ul class="list warn" id="warns"></ul></div>
+      <div class="card"><h3>Cómo mejorarla</h3><ul class="list tips" id="tips"></ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ POLÍTICA ============ -->
+<section class="view" id="v-politica">
+  <p class="intro">Una política es la regla que impone el sistema, por ejemplo «de 8 a 12 caracteres, con al menos una mayúscula, una minúscula, un número y un símbolo». Aquí se cuenta cuántas claves admite y cuántas cumplen la exigencia, usando inclusión-exclusión.</p>
+  <div class="grid g2">
+    <div class="card">
+      <h2>Define la política</h2>
+      <div class="opts" id="pOpts"></div>
+      <div class="range">
+        <div><label for="lmin">Longitud mínima</label><output id="lminO" class="num">8</output><input id="lmin" type="range" min="1" max="24" value="8"></div>
+        <div><label for="lmax">Longitud máxima</label><output id="lmaxO" class="num">12</output><input id="lmax" type="range" min="1" max="32" value="12"></div>
+      </div>
+      <label class="switch" for="req"><input id="req" type="checkbox" checked> Exigir al menos un carácter de cada tipo permitido</label>
+    </div>
+    <div class="card">
+      <h2>Resultado</h2>
+      <span class="level" id="pLevel">—</span>
+      <div class="tiles" style="grid-template-columns:repeat(2,1fr)">
+        <div class="tile"><div class="k">Alfabeto</div><div class="v num" id="pN">0</div><div class="s" id="pNs"></div></div>
+        <div class="tile"><div class="k">Entropía (L mínima)</div><div class="v num" id="pE">0</div><div class="s">bits, caso más débil</div></div>
+        <div class="tile"><div class="k">Espacio total</div><div class="v num" id="pW">0</div><div class="s" id="pWs"></div></div>
+        <div class="tile"><div class="k">Atacante 10<sup>10</sup> int/s</div><div class="v num" id="pT">0</div><div class="s">tiempo promedio</div></div>
+      </div>
+      <div id="pPctBox">
+        <p class="note" style="margin-top:16px" id="pPctTxt"></p>
+        <div class="pct"><i id="pPct"></i><span id="pPctV"></span></div>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:18px" id="ieCard">
+    <h2>Inclusión-exclusión, término por término <span class="eq-tag">(4)</span></h2>
+    <p class="note" style="margin-top:-4px">Se cuentan las cadenas que evitan por completo ciertos tipos y se suman o restan según cuántos tipos se excluyen.</p>
+    <div class="tablebox"><table id="ieTable"></table></div>
+  </div>
+</section>
+
+<!-- ============ COMPARAR ============ -->
+<section class="view" id="v-comparar">
+  <p class="intro">La pendiente de cada recta es log<sub>2</sub> N: agregar un tipo de carácter la inclina un poco, pero cada carácter extra sube la recta entera. Por eso la longitud pesa más que la variedad.</p>
+  <div class="card">
+    <h2>Entropía según la longitud</h2>
+    <svg class="chart" id="chart" viewBox="0 0 900 380" role="img" aria-label="Gráfica de entropía contra longitud para cuatro alfabetos"></svg>
+    <div class="legend" id="legend"></div>
+  </div>
+  <div class="card" style="margin-top:18px">
+    <h2>Tabla comparativa</h2>
+    <div class="tablebox"><table id="cmp"></table></div>
+    <form class="addrow" id="addForm">
+      <input id="addIn" placeholder="Agrega otra contraseña de prueba" autocomplete="off" spellcheck="false" aria-label="Contraseña para comparar">
+      <button class="btn" type="submit">Agregar</button>
+    </form>
+  </div>
+</section>
+
+<!-- ============ MATEMÁTICA ============ -->
+<section class="view" id="v-matematica">
+  <p class="intro">Estas son las fórmulas que usa PassShield. Todas salen de las técnicas de conteo del curso de Matemáticas Discretas.</p>
+  <div class="grid g2">
+    <div class="card math-card">
+      <h2>Regla de la suma <span class="eq-tag">(1)</span></h2>
+      <p>Mayúsculas, minúsculas, dígitos y símbolos no comparten elementos, así que el tamaño del alfabeto es la suma de sus cardinales.</p>
+      <div class="formula">N = |M| + |m| + |D| + |S| = 26 + 26 + 10 + 32 = 94</div>
+    </div>
+    <div class="card math-card">
+      <h2>Principio multiplicativo <span class="eq-tag">(2)</span></h2>
+      <p>Cada una de las L posiciones admite N caracteres, con repetición y donde el orden importa: permutaciones con repetición.</p>
+      <div class="formula">W = N · N · … · N = N<sup>L</sup></div>
+    </div>
+    <div class="card math-card">
+      <h2>Varias longitudes <span class="eq-tag">(3)</span></h2>
+      <p>Si se aceptan longitudes de L<sub>min</sub> a L<sub>max</sub>, cada longitud es un caso disjunto y se aplica otra vez la regla de la suma.</p>
+      <div class="formula">W<sub>total</sub> = Σ N<sup>L</sup>,  L = L<sub>min</sub> … L<sub>max</sub></div>
+    </div>
+    <div class="card math-card">
+      <h2>Inclusión-exclusión <span class="eq-tag">(4)</span></h2>
+      <p>Para exigir al menos un carácter de cada tipo de K, se restan las cadenas a las que les falta algún tipo.</p>
+      <div class="formula">Σ<sub>S⊆K</sub> (−1)<sup>|S|</sup> (N − Σ<sub>i∈S</sub>|i|)<sup>L</sup></div>
+    </div>
+    <div class="card math-card">
+      <h2>Entropía <span class="eq-tag">(5)</span></h2>
+      <p>Mide el tamaño del espacio en bits. Cada bit adicional duplica las combinaciones.</p>
+      <div class="formula">E = log<sub>2</sub> W = L · log<sub>2</sub> N</div>
+    </div>
+    <div class="card math-card">
+      <h2>Tiempo de ruptura <span class="eq-tag">(6)</span></h2>
+      <p>Con R intentos por segundo. El nivel se asigna con el promedio para R = 10<sup>10</sup>.</p>
+      <div class="formula">T<sub>peor</sub> = W / R      T<sub>prom</sub> = (W + 1) / 2R</div>
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-top:18px">
+    <div class="card math-card">
+      <h2>Ejemplo para resolver en el tablero</h2>
+      <p>Alfabeto {a, b, 1}, claves de longitud 2. Se exige al menos una letra y al menos un número.</p>
+      <table class="example">
+        <thead><tr><th>Término</th><th>Qué cuenta</th><th class="r">Valor</th></tr></thead>
+        <tbody>
+          <tr><td class="sign">+</td><td>todas: 3<sup>2</sup></td><td class="r">9</td></tr>
+          <tr><td class="sign">−</td><td>sin letras: 1<sup>2</sup></td><td class="r">1</td></tr>
+          <tr><td class="sign">−</td><td>sin números: 2<sup>2</sup></td><td class="r">4</td></tr>
+          <tr><td class="sign">+</td><td>sin ninguna de las dos: 0<sup>2</sup></td><td class="r">0</td></tr>
+          <tr class="total"><td class="sign">=</td><td>a1, 1a, b1, 1b</td><td class="r">4</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card math-card">
+      <h2>Límites del modelo</h2>
+      <p>El cálculo supone que la clave se eligió al azar. Las personas usan nombres, años y palabras, y un ataque de diccionario prueba eso primero. Por eso el resultado es una cota superior y PassShield muestra advertencias cuando detecta esos patrones.</p>
+      <p>Los atacantes reales tampoco tienen una velocidad fija: depende del algoritmo de <em>hash</em> del sistema. Las tres velocidades son órdenes de magnitud de referencia.</p>
+      <p style="color:var(--muted);font-size:14px">Referencias: Rosen (2019), Grimaldi (2004), Shannon (1948), Weir et al. (2010), NIST SP 800-63B.</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>PassShield · Proyecto de aula de Matemáticas Discretas · Ingeniería en Ciencias de la Computación e IA</span>
+    <span>Integrantes: Gabriel Díaz · Saray Silva · Paola Sánchez · Bladimir Bermúdez</span>
+  </div>
+</footer>
+
+<script>
+(() => {
+"use strict";
+const $ = (id) => document.getElementById(id);
+
+// ---------- datos ----------
+const SETS = [
+  { key: "M", name: "Mayúsculas", chars: "ABCDEFGHIJKLMNOPQRSTUVWXYZ" },
+  { key: "m", name: "Minúsculas", chars: "abcdefghijklmnopqrstuvwxyz" },
+  { key: "D", name: "Dígitos", chars: "0123456789" },
+  { key: "S", name: "Símbolos", chars: "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~" },
+];
+const ATTACKS = [
+  { name: "En línea, servidor con límite de intentos", r: 1e3 },
+  { name: "Fuera de línea, hash lento", r: 1e6 },
+  { name: "Fuera de línea, GPU y hash rápido", r: 1e10 },
+];
+const HOUR = 3600, DAY = 86400, YEAR = 365.25 * DAY;
+const LEVELS = [
+  { lim: HOUR, name: "Muy débil", c: "--l1", txt: "Se rompe en menos de una hora aunque el atacante pruebe todas las combinaciones." },
+  { lim: 30 * DAY, name: "Débil", c: "--l2", txt: "Resiste horas o días frente a un atacante con GPU: poco si la base de datos se filtra." },
+  { lim: 100 * YEAR, name: "Media", c: "--l3", txt: "Aguanta meses o años, pero no lo suficiente si los datos quedan expuestos mucho tiempo." },
+  { lim: 1e6 * YEAR, name: "Fuerte", c: "--l4", txt: "Un ataque de fuerza bruta tomaría siglos o milenios." },
+  { lim: Infinity, name: "Muy fuerte", c: "--l5", txt: "Fuera del alcance de la fuerza bruta con tecnología actual." },
+];
+const COMMON = new Set(["123456","123456789","12345678","12345","1234567","password","qwerty","abc123","111111","123123","admin","contraseña","colombia","iloveyou","000000","1234","qwerty123","password1","teamo","654321"]);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+// ---------- matemática ----------
+const classify = (pw) => {
+  const types = new Set(), other = new Set();
+  for (const c of pw) {
+    const s = SETS.find((s) => s.chars.includes(c));
+    s ? types.add(s.key) : other.add(c);
+  }
+  return { types, other };
+};
+const sizeOf = (keys) => SETS.filter((s) => keys.has(s.key)).reduce((a, s) => a + s.chars.length, 0);
+const pow = (n, l) => BigInt(n) ** BigInt(l);
+const log10Big = (b) => {
+  if (b <= 0n) return -Infinity;
+  const s = b.toString();
+  const head = Number(s.slice(0, 16));
+  return Math.log10(head) + (s.length - Math.min(16, s.length));
+};
+const LOG2_10 = Math.log2(10);
+const inclusionExclusion = (keys, L) => {
+  const list = SETS.filter((s) => keys.has(s.key));
+  const n = list.reduce((a, s) => a + s.chars.length, 0);
+  const rows = []; let total = 0n;
+  for (let mask = 0; mask < (1 << list.length); mask++) {
+    const ex = list.filter((_, i) => mask & (1 << i));
+    const rest = n - ex.reduce((a, s) => a + s.chars.length, 0);
+    const v = pow(rest, L);
+    const k = ex.length;
+    total += (k % 2 ? -1n : 1n) * v;
+    (rows[k] ||= []).push({ base: rest, v, names: ex.map((s) => s.key) });
+  }
+  return { total, rows, n };
+};
+// log10 de segundos promedio
+const log10AvgSeconds = (log10W, r) => log10W - Math.log10(2) - Math.log10(r);
+const levelOf = (log10s) => LEVELS.findIndex((l) => log10s < Math.log10(l.lim));
+
+// ---------- formato ----------
+const dec = (x, d = 1) => x.toLocaleString("es-CO", { minimumFractionDigits: d, maximumFractionDigits: d });
+const groupBig = (b) => b.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+const sci = (log10) => {
+  const e = Math.floor(log10), m = Math.pow(10, log10 - e);
+  return `${dec(m, 2)} × 10<sup>${e}</sup>`;
+};
+const fmtBig = (b) => b.toString().length <= 12 ? groupBig(b) : sci(log10Big(b));
+const fmtTime = (l10) => {
+  if (l10 < -3) return "instantáneo";
+  const s = Math.pow(10, l10);
+  if (s < 1) return `${Math.round(s * 1000)} ms`;
+  if (s < 60) return `${dec(s)} segundos`;
+  if (s < HOUR) return `${dec(s / 60)} minutos`;
+  if (s < DAY) return `${dec(s / HOUR)} horas`;
+  if (s < YEAR) return `${dec(s / DAY)} días`;
+  const ly = l10 - Math.log10(YEAR);
+  if (ly < 1) return `${dec(Math.pow(10, ly))} años`;
+  if (ly < 6) return `${Math.round(Math.pow(10, ly)).toLocaleString("es-CO")} años`;
+  return `${sci(ly)} años`;
+};
+const esc = (t) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const pill = (i) => `<span class="pill" style="background:var(${LEVELS[i].c})">${LEVELS[i].name}</span>`;
+
+// ---------- análisis de una contraseña ----------
+const analyze = (pw) => {
+  const chars = [...pw];
+  const L = chars.length;
+  const { types, other } = classify(pw);
+  const N = sizeOf(types) + other.size;
+  const W = N > 0 ? pow(N, L) : 0n;
+  const E = N > 1 ? L * Math.log2(N) : 0;
+  const l10W = N > 0 ? L * Math.log10(N) : -Infinity;
+  const lvl = L === 0 ? 0 : levelOf(log10AvgSeconds(l10W, 1e10));
+  return { pw, L, types, other, N, W, E, l10W, lvl };
+};
+
+const warnings = (pw) => {
+  const out = [], low = pw.toLowerCase();
+  if (COMMON.has(low)) out.push("Está entre las contraseñas más usadas: un ataque de diccionario la encuentra al instante.");
+  if (pw.length >= 3 && new Set(pw).size <= Math.max(1, Math.floor(pw.length / 3))) out.push("Repite muchos caracteres.");
+  const seqs = ["0123456789", "abcdefghijklmnopqrstuvwxyz", "qwertyuiop", "asdfghjkl"];
+  outer: for (const s of seqs) for (let i = 0; i + 4 <= s.length; i++) {
+    const p = s.slice(i, i + 4);
+    if (low.includes(p) || low.includes([...p].reverse().join(""))) { out.push(`Contiene una secuencia predecible («${p}»).`); break outer; }
+  }
+  const y = pw.match(/(19[5-9]\d|20[0-3]\d)/);
+  if (y) out.push(`Incluye un año (${y[0]}). Los atacantes prueban fechas primero.`);
+  if (/^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\d*[^\w\s]?$/.test(pw) && pw.length > 3) out.push("Sigue el patrón Nombre + números + símbolo, el más común en claves humanas.");
+  return out;
+};
+
+const tips = (a) => {
+  const out = [];
+  if (a.N === 0) return out;
+  for (const s of SETS) if (!a.types.has(s.key)) {
+    const f = Math.pow((a.N + s.chars.length) / a.N, a.L);
+    out.push(`Agregar ${s.name.toLowerCase()} lleva N de ${a.N} a ${a.N + s.chars.length} y multiplica el espacio por ~${Math.round(f).toLocaleString("es-CO")}.`);
+  }
+  out.push(`Cada carácter adicional multiplica el espacio por ${a.N}.`);
+  if (a.N > 1) {
+    const need = Math.ceil(80 / Math.log2(a.N));
+    if (need > a.L) out.push(`Con este alfabeto se necesitan al menos ${need} caracteres para llegar a 80 bits.`);
+  }
+  return out.slice(0, 4);
+};
+
+// ---------- render: contraseña ----------
+const pwIn = $("pw");
+$("sets").innerHTML = SETS.map((s) => `<div class="set" data-k="${s.key}"><small>${s.name}</small><b>${s.chars.length} <small>(${s.key})</small></b></div>`).join("");
+
+const renderPw = () => {
+  const a = analyze(pwIn.value);
+  const col = css(LEVELS[a.lvl].c);
+  // resumen
+  $("gBits").textContent = Math.round(a.E);
+  const frac = Math.min(a.E / 128, 1);
+  $("gArc").setAttribute("stroke-dasharray", `${(frac * 327).toFixed(1)} 327`);
+  $("gArc").setAttribute("stroke", col);
+  const lv = $("level");
+  lv.textContent = a.L ? LEVELS[a.lvl].name : "Sin datos";
+  lv.style.background = a.L ? col : css("--muted");
+  [...$("meter").children].forEach((sp, i) => (sp.style.background = a.L && i <= a.lvl ? col : ""));
+  $("verdict").textContent = a.L ? LEVELS[a.lvl].txt : "Escribe una contraseña para empezar.";
+  $("tL").textContent = a.L;
+  $("tN").textContent = a.N;
+  $("tW").innerHTML = a.L ? fmtBig(a.W) : "0";
+  // paso a paso
+  document.querySelectorAll(".set").forEach((el) => el.classList.toggle("on", a.types.has(el.dataset.k)));
+  const parts = SETS.filter((s) => a.types.has(s.key)).map((s) => s.chars.length);
+  if (a.other.size) parts.push(`${a.other.size} (otros)`);
+  $("s1").innerHTML = a.N ? `N = ${parts.join(" + ")} = <b>${a.N}</b>` : "N = 0";
+  $("s2").innerHTML = a.L ? `W = ${a.N}<sup>${a.L}</sup> = <b>${fmtBig(a.W)}</b>` : "W = 0";
+  $("s2big").textContent = a.L ? `Valor exacto (${a.W.toString().length} dígitos): ${groupBig(a.W)}` : "";
+  $("s3").innerHTML = a.N > 1 ? `E = ${a.L} · log<sub>2</sub>(${a.N}) = <b>${dec(a.E, 2)} bits</b>` : "E = 0 bits";
+  // ataques
+  $("attacks").innerHTML = ATTACKS.map((at) => {
+    const avg = a.L ? log10AvgSeconds(a.l10W, at.r) : -Infinity;
+    const worst = a.L ? a.l10W - Math.log10(at.r) : -Infinity;
+    const li = a.L ? levelOf(avg) : 0;
+    const w = a.L ? Math.max(2, Math.min(100, ((avg + 3) / (Math.log10(YEAR) + 12 + 3)) * 100)) : 0;
+    return `<div class="attack"><div><div class="name">${at.name}</div><div class="rate">${at.r.toLocaleString("es-CO")} intentos/s</div></div>
+      <div><div class="t">${a.L ? fmtTime(avg) : "—"}</div><div class="tp">peor caso: ${a.L ? fmtTime(worst) : "—"}</div></div>
+      <div class="bar"><i style="width:${w}%;background:var(${LEVELS[li].c})"></i></div></div>`;
+  }).join("");
+  const ws = a.L ? warnings(a.pw) : [];
+  $("warns").innerHTML = ws.length ? ws.map((w) => `<li>${esc(w)}</li>`).join("") : `<li class="empty" style="border:0;background:none;padding:0">No se detectaron patrones comunes.</li>`;
+  const ts = tips(a);
+  $("tips").innerHTML = ts.length ? ts.map((t) => `<li>${t}</li>`).join("") : `<li class="empty" style="border:0;background:none;padding:0">Escribe una contraseña para ver sugerencias.</li>`;
+  renderChart(a);
+};
+pwIn.addEventListener("input", renderPw);
+document.querySelectorAll(".examples .chip").forEach((b) => b.addEventListener("click", () => { pwIn.value = b.textContent; renderPw(); pwIn.focus(); }));
+$("toggle").addEventListener("click", (e) => {
+  const hide = pwIn.type === "text";
+  pwIn.type = hide ? "password" : "text";
+  e.currentTarget.textContent = hide ? "Mostrar" : "Ocultar";
+  e.currentTarget.setAttribute("aria-pressed", String(hide));
+});
+
+// ---------- render: política ----------
+$("pOpts").innerHTML = SETS.map((s) => `<label class="opt" for="p${s.key}"><input type="checkbox" id="p${s.key}" data-k="${s.key}" checked> ${s.name}<span class="c">${s.chars.length}</span></label>`).join("");
+const lmin = $("lmin"), lmax = $("lmax"), req = $("req");
+const renderPolicy = () => {
+  if (+lmax.value < +lmin.value) lmax.value = lmin.value;
+  $("lminO").textContent = lmin.value; $("lmaxO").textContent = lmax.value;
+  const keys = new Set([...document.querySelectorAll("#pOpts input:checked")].map((i) => i.dataset.k));
+  const L1 = +lmin.value, L2 = +lmax.value;
+  const N = sizeOf(keys);
+  if (!N) {
+    ["pN","pE","pW","pT"].forEach((id) => ($(id).textContent = "—"));
+    $("pLevel").textContent = "Elige al menos un tipo"; $("pLevel").style.background = css("--muted");
+    $("pPctBox").style.display = "none"; $("ieCard").style.display = "none"; return;
+  }
+  let total = 0n; for (let l = L1; l <= L2; l++) total += pow(N, l);
+  const useIE = req.checked && keys.size > 1;
+  const ie = inclusionExclusion(keys, L1);
+  const valid = useIE ? ie.total : pow(N, L1);
+  const l10 = log10Big(valid);
+  const E = l10 * LOG2_10;
+  const avg = log10AvgSeconds(l10, 1e10);
+  const li = levelOf(avg);
+  $("pN").textContent = N;
+  $("pNs").textContent = SETS.filter((s) => keys.has(s.key)).map((s) => s.chars.length).join(" + ");
+  $("pE").textContent = dec(E, 1);
+  $("pW").innerHTML = fmtBig(total);
+  $("pWs").innerHTML = L1 === L2 ? `${N}<sup>${L1}</sup>` : `Σ ${N}<sup>L</sup>, L = ${L1}…${L2}`;
+  $("pT").innerHTML = fmtTime(avg);
+  $("pLevel").textContent = LEVELS[li].name; $("pLevel").style.background = css(LEVELS[li].c);
+  $("pPctBox").style.display = useIE ? "" : "none";
+  $("ieCard").style.display = useIE ? "" : "none";
+  if (!useIE) return;
+  const pct = Number((ie.total * 1000000n) / pow(N, L1)) / 10000;
+  $("pPct").style.width = pct + "%";
+  $("pPctV").textContent = dec(pct, 2) + " %";
+  $("pPctTxt").innerHTML = `De las ${fmtBig(pow(N, L1))} claves de ${L1} caracteres, solo estas cumplen la exigencia. La regla obliga a variar, pero achica el espacio de búsqueda.`;
+  const label = ["ninguno", "uno", "dos", "tres", "los cuatro"];
+  let rows = "";
+  ie.rows.forEach((grp, k) => {
+    const counts = new Map();
+    grp.forEach((g) => counts.set(g.base, (counts.get(g.base) || 0) + 1));
+    const expr = [...counts].sort((x, y) => y[0] - x[0]).map(([b, c]) => `${c > 1 ? c + "·" : ""}${b}<sup>${L1}</sup>`).join(" + ");
+    const sum = grp.reduce((a, g) => a + g.v, 0n);
+    rows += `<tr><td class="sign">${k % 2 ? "−" : "+"}</td><td>${k === keys.size ? (k === 4 ? "los cuatro" : "todos") : label[k]}</td><td class="mono">${expr}</td><td class="r mono num">${groupBig(sum)}</td></tr>`;
+  });
+  rows += `<tr class="total"><td class="sign">=</td><td>claves válidas</td><td></td><td class="r mono num">${groupBig(ie.total)}</td></tr>`;
+  $("ieTable").innerHTML = `<thead><tr><th style="width:60px">Signo</th><th>Tipos excluidos</th><th>Expresión</th><th class="r">Valor</th></tr></thead><tbody>${rows}</tbody>`;
+};
+[lmin, lmax, req].forEach((el) => el.addEventListener("input", renderPolicy));
+$("pOpts").addEventListener("change", renderPolicy);
+
+// ---------- render: comparar ----------
+let cmpList = ["123456", "andres", "Andres", "Andres2024", "Andres2024*", "t7#Kq!v2Lm9$zR"];
+const renderCmp = () => {
+  const rows = cmpList.map((p, i) => {
+    const a = analyze(p);
+    return `<tr><td class="mono">${esc(p)}</td><td class="r num">${a.L}</td><td class="r num">${a.N}</td><td class="r num">${dec(a.E, 1)}</td><td class="r">${fmtTime(log10AvgSeconds(a.l10W, 1e10))}</td><td>${pill(a.lvl)}</td><td class="r"><button class="x" type="button" data-i="${i}" aria-label="Quitar ${esc(p)}">×</button></td></tr>`;
+  }).join("");
+  $("cmp").innerHTML = `<thead><tr><th>Contraseña</th><th class="r">L</th><th class="r">N</th><th class="r">Bits</th><th class="r">Tiempo prom. (10<sup>10</sup> int/s)</th><th>Nivel</th><th></th></tr></thead><tbody>${rows}</tbody>`;
+};
+$("cmp").addEventListener("click", (e) => { const b = e.target.closest(".x"); if (b) { cmpList.splice(+b.dataset.i, 1); renderCmp(); } });
+$("addForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("addIn").value; if (v) { cmpList.push(v); $("addIn").value = ""; renderCmp(); } });
+
+const ALPHAS = [
+  { n: 10, name: "Solo dígitos", c: "--l1" },
+  { n: 26, name: "Minúsculas", c: "--l2" },
+  { n: 62, name: "Letras y dígitos", c: "--brass" },
+  { n: 94, name: "Alfabeto completo", c: "--accent" },
+];
+function renderChart(cur) {
+  const W = 900, H = 380, pl = 52, pr = 120, pt = 16, pb = 40;
+  const x0 = 4, x1 = 20, y1 = 140;
+  const X = (l) => pl + ((l - x0) / (x1 - x0)) * (W - pl - pr);
+  const Y = (b) => pt + (1 - b / y1) * (H - pt - pb);
+  let s = "";
+  for (let b = 0; b <= y1; b += 20) s += `<line x1="${pl}" x2="${W - pr}" y1="${Y(b)}" y2="${Y(b)}" stroke="var(--line)"/><text x="${pl - 8}" y="${Y(b) + 4}" text-anchor="end">${b}</text>`;
+  for (let l = x0; l <= x1; l += 2) s += `<text x="${X(l)}" y="${H - pb + 18}" text-anchor="middle">${l}</text>`;
+  s += `<text x="${(pl + W - pr) / 2}" y="${H - 4}" text-anchor="middle">Longitud L</text>`;
+  s += `<text transform="translate(14 ${(pt + H - pb) / 2}) rotate(-90)" text-anchor="middle">Entropía (bits)</text>`;
+  [[HOUR, "1 hora"], [YEAR, "1 año"], [1e6 * YEAR, "10⁶ años"]].forEach(([t, txt]) => {
+    const b = Math.log2(2 * 1e10 * t);
+    s += `<line x1="${pl}" x2="${W - pr}" y1="${Y(b)}" y2="${Y(b)}" stroke="var(--muted)" stroke-dasharray="3 4"/><text x="${W - pr + 6}" y="${Y(b) + 4}">${txt}</text>`;
+  });
+  ALPHAS.forEach((a) => {
+    const pts = []; for (let l = x0; l <= x1; l++) pts.push(`${X(l).toFixed(1)},${Y(Math.min(y1, l * Math.log2(a.n))).toFixed(1)}`);
+    s += `<polyline points="${pts.join(" ")}" fill="none" stroke="var(${a.c})" stroke-width="2.5" stroke-linejoin="round"/>`;
+  });
+  if (cur && cur.L >= x0 && cur.L <= x1 && cur.E <= y1 && cur.E > 0) {
+    const cx = X(cur.L), cy = Y(cur.E);
+    s += `<circle cx="${cx}" cy="${cy}" r="7" fill="var(--panel)" stroke="var(--ink)" stroke-width="2.5"/><text class="lbl" x="${cx + 12}" y="${cy + 22}">Tu contraseña (${dec(cur.E, 1)} bits)</text>`;
+  }
+  $("chart").innerHTML = s;
+}
+$("legend").innerHTML = ALPHAS.map((a) => `<span><i style="background:var(${a.c})"></i>${a.name} (N = ${a.n})</span>`).join("") + `<span><i style="background:var(--muted)"></i>Umbrales con 10<sup>10</sup> int/s</span>`;
+
+// ---------- navegación ----------
+const VIEWS = ["contrasena", "politica", "comparar", "matematica"];
+const route = () => {
+  const h = location.hash.slice(1);
+  const v = VIEWS.includes(h) ? h : "contrasena";
+  VIEWS.forEach((id) => $("v-" + id).classList.toggle("on", id === v));
+  document.querySelectorAll("nav a").forEach((a) => (a.dataset.view === v ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
+};
+window.addEventListener("hashchange", route);
+const rerender = () => { renderPw(); renderPolicy(); renderCmp(); };
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", rerender);
+new MutationObserver(rerender).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+route(); rerender();
+})();
+</script>
+</body>
+</html>
